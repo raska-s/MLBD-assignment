@@ -21,7 +21,7 @@ sc = pyspark.SparkContext(conf=conf)
 spark = SparkSession(sc)
 from functools import reduce
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import monotonically_increasing_id
+# from pyspark.sql.functions import monotonically_increasing_id
 from pyspark.sql import SparkSession,types
 from pyspark.sql.functions import col,regexp_replace
 from pyspark.sql import functions as F 
@@ -167,10 +167,15 @@ getLinearTrendlineCoef = udf(lambda *args: linearTrendlineCoefficient(*args), T.
 #Selecting columns for trendline
 df_coef = Final.select(Final.columns[4:])
 #Fitting trendline 
-df_coef = df_coef.withColumn('Linear Coef', getLinearTrendlineCoef(*[F.col(i) for i in df_coef.columns]))
+df_coef = df_coef.withColumn('linear_coef', getLinearTrendlineCoef(*[F.col(i) for i in df_coef.columns]))
 
 df_coef = df_coef.withColumn("row_id", row_number().over(w))
-df_coef = df_coef.join(country, on="row_id", how='full_outer').drop("row_id")
-df_coef = df_coef.select(df_coef.columns[-5:] + df_coef.columns[:-5])
-coef_pandas = df_coef.toPandas()
-coef_transposed = coef_pandas.T
+data_by_dates = data_by_dates.withColumn("row_id", row_number().over(w))
+country = country.join(df_coef.select('linear_coef','row_id'), on='row_id', how='full_outer')
+df_all = country.join(data_by_dates, on="row_id", how='full_outer').drop("row_id")
+df_all = df_all.sort(F.col("linear_coef").desc())
+
+
+#%%
+
+
