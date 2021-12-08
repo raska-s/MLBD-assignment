@@ -32,14 +32,11 @@ from pyspark.sql.functions import row_number, lit
 
 # In[2]:
 
-
 #reading the csv into a spark dataframe
 data = spark.read.csv('data.csv', header=True, inferSchema=True)
 
-
 # In[3]:
-
-
+    
 #dropping unwanted columns and grouping by countries
 df = data
 
@@ -113,7 +110,7 @@ for i in range(len(ls)):
     if i == 0:
         pass
     else:
-        mean_fullframe = Last_dates_data.withColumn(ls[i],(F.col(ls[i])))
+        mean_fullframe = Last_dates_data.withColumn(ls[i],(F.col(ls[i])-F.col(ls[i-1])))
         mean_singleframe = mean_fullframe.select(mean_fullframe.columns[i])
         DF3 = mean_singleframe.withColumn("row_id", row_number().over(w))
         
@@ -160,7 +157,8 @@ def linearTrendlineCoefficient(*args):
     X = np.array(X)
     y = np.arange(len(X))
     X = X.reshape((-1,1))
-    reg = LinearRegression().fit(X, y)
+    y = y.reshape((-1,1))
+    reg = LinearRegression().fit(y, X)
     coef_array = reg.coef_
     out = coef_array[0]
     return float(out)
@@ -175,3 +173,4 @@ df_coef = df_coef.withColumn("row_id", row_number().over(w))
 df_coef = df_coef.join(country, on="row_id", how='full_outer').drop("row_id")
 df_coef = df_coef.select(df_coef.columns[-5:] + df_coef.columns[:-5])
 coef_pandas = df_coef.toPandas()
+coef_transposed = coef_pandas.T
