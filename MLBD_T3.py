@@ -13,19 +13,11 @@ findspark.init()
 import pyspark
 findspark.find()
 from pyspark.sql.functions import col
-import dateutil.parser
-from pyspark import SparkContext, SparkConf
 from pyspark.sql import SparkSession
 conf = pyspark.SparkConf().setAppName('SparkApp').setMaster('local')
 sc = pyspark.SparkContext(conf=conf)
 spark = SparkSession(sc)
-from functools import reduce
-from pyspark.sql import DataFrame
-# from pyspark.sql.functions import monotonically_increasing_id
-from pyspark.sql import SparkSession,types
-# from pyspark.sql.functions import col,regexp_replace
 from pyspark.sql import functions as F 
-import pyspark.sql.functions as F
 from pyspark.sql.window import Window
 from pyspark.sql.functions import row_number, lit
 
@@ -37,7 +29,6 @@ def getMonthlyIncreases(data):
     
     #dropping unwanted columns and grouping by countries
     df = data
-    # .groupBy("Province/State").sum()
     w = Window.partitionBy(lit(1)).orderBy(lit(1))
     country_region = df.select(df.columns[:4])
     data_by_dates = df.select(df.columns[4:])
@@ -69,8 +60,7 @@ def getMonthlyIncreases(data):
             
     Data_datesLast = renamed_frame_afterGroupby.select(lastdates)
     #renaming multiple columns
-    # from pyspark.sql.functions import col
-    
+
     mapping = dict(zip(lastdates,lstdat))
     Last_dates_data = Data_datesLast.select([F.col(c).alias(mapping.get(c, c)) for c in Data_datesLast.columns])
     
@@ -105,7 +95,6 @@ def getMonthlyAverage(data):
     
     #dropping unwanted columns and grouping by countries
     df = data
-    # .groupBy("Province/State").sum()
     w = Window.partitionBy(lit(1)).orderBy(lit(1))
     country_region = df.select(df.columns[:4])
     data_by_dates = df.select(df.columns[4:])
@@ -137,7 +126,6 @@ def getMonthlyAverage(data):
             
     Data_datesLast = renamed_frame_afterGroupby.select(lastdates)
     #renaming multiple columns
-    # from pyspark.sql.functions import col
     
     mapping = dict(zip(lastdates,lstdat))
     Last_dates_data = Data_datesLast.select([col(c).alias(mapping.get(c, c)) for c in Data_datesLast.columns])
@@ -227,7 +215,6 @@ top50_T = spark.createDataFrame(top50_p)
 #%%
 
 def kMeansFit(*args):
-    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     """
@@ -307,20 +294,15 @@ def kMeansFit(*args):
         count+=1 
     # convergenceHistory  = pd.DataFrame(convergenceHistory, columns=['centroid mean'])
     # convergenceHistory.insert(loc=0, column='iter', value=np.arange(1, count+1))
-
     out = __getPointwiseCentroid(y, centroids)
     _, out = np.unique(out, return_inverse=True)
-
-    # out = int(out)
     out = list(out)
     out = str(out)
-
     return out
 
 getKmeansCluster = udf(lambda *args: kMeansFit(*args), T.StringType())
 #Fitting cluster 
 top50_T = top50_T.withColumn('cluster_id', getKmeansCluster(*[F.col(i) for i in top50_T.columns]))
-
 
 #%%
 clusters = top50_T.select('cluster_id').toPandas()
@@ -346,3 +328,4 @@ df_clusterID = spark.createDataFrame(df_clusterID)
 df_clusterID = df_clusterID.withColumn("row_id", row_number().over(w))
 top50_headers = top50.select('Province/State', 'Country/Region', 'Lat', 'Long', 'linear_coef').withColumn("row_id", row_number().over(w))
 df_clusterID = top50_headers.join(df_clusterID, on='row_id', how='full').drop('row_id')
+aa = df_clusterID.toPandas()
