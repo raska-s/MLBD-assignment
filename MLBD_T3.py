@@ -8,6 +8,7 @@ Created on Tue Dec  7 17:23:31 2021
 # In[1]:
 # TODO: KMEans for pyspark
 
+import numpy as np
 import findspark
 findspark.init()
 import pyspark
@@ -20,25 +21,23 @@ spark = SparkSession(sc)
 from pyspark.sql import functions as F 
 from pyspark.sql.window import Window
 from pyspark.sql.functions import row_number, lit
+from pyspark.sql.functions import udf
+from pyspark.sql import types as T
+import pandas as pd
 
-#%%reading the csv into a spark dataframe
-data = spark.read.csv('data.csv', header=True, inferSchema=True)
-#%%
+
+#%% Defining all functions
 
 def getMonthlyIncreases(data):
-    
     #dropping unwanted columns and grouping by countries
     df = data
     w = Window.partitionBy(lit(1)).orderBy(lit(1))
     country_region = df.select(df.columns[:4])
     data_by_dates = df.select(df.columns[4:])
     
-    
-    
     #Renaming date columns after groupby
     headers_before_groupby =  data.select(data.columns[4:]).columns
     headers_after_groupby = data_by_dates.columns
-    
     mapping = dict(zip(headers_after_groupby,headers_before_groupby))
     renamed_frame_afterGroupby = data_by_dates.select([F.col(c).alias(mapping.get(c, c)) for c in data_by_dates.columns])
     
@@ -60,7 +59,6 @@ def getMonthlyIncreases(data):
             
     Data_datesLast = renamed_frame_afterGroupby.select(lastdates)
     #renaming multiple columns
-
     mapping = dict(zip(lastdates,lstdat))
     Last_dates_data = Data_datesLast.select([F.col(c).alias(mapping.get(c, c)) for c in Data_datesLast.columns])
     
@@ -92,19 +90,15 @@ def getMonthlyIncreases(data):
     return monthly_increases
 
 def getMonthlyAverage(data):
-    
     #dropping unwanted columns and grouping by countries
     df = data
     w = Window.partitionBy(lit(1)).orderBy(lit(1))
     country_region = df.select(df.columns[:4])
     data_by_dates = df.select(df.columns[4:])
     
-    
-    
     #Renaming date columns after groupby
     headers_before_groupby =  data.select(data.columns[4:]).columns
     headers_after_groupby = data_by_dates.columns
-    
     mapping = dict(zip(headers_after_groupby,headers_before_groupby))
     renamed_frame_afterGroupby = data_by_dates.select([F.col(c).alias(mapping.get(c, c)) for c in data_by_dates.columns])
     
@@ -122,11 +116,9 @@ def getMonthlyAverage(data):
         if i == '1/31/20':
             lstdat.append(i+"-8"+"-days")
         else:
-            lstdat.append(i+"-"+i.split("/")[1]+"-days")
-            
+            lstdat.append(i+"-"+i.split("/")[1]+"-days") 
     Data_datesLast = renamed_frame_afterGroupby.select(lastdates)
     #renaming multiple columns
-    
     mapping = dict(zip(lastdates,lstdat))
     Last_dates_data = Data_datesLast.select([col(c).alias(mapping.get(c, c)) for c in Data_datesLast.columns])
     
@@ -157,19 +149,6 @@ def getMonthlyAverage(data):
     mean_values = mean_values.toPandas()
     return mean_values
 
-
-monthly_increases = getMonthlyIncreases(data)
-mean_values = getMonthlyAverage(data)
-monthly_increases = spark.createDataFrame(monthly_increases)
-mean_values = spark.createDataFrame(mean_values)
-df_vals = data.drop('Province/State', 'Country/Region', 'Lat', 'Long')
-df_headers = data.select('Province/State', 'Country/Region', 'Lat', 'Long')
-# monthly_increases.printSchema()
-
-# In[15]:
-from pyspark.sql.functions import udf
-from pyspark.sql import types as T
-import pandas as pd
 #Define standard trendline function
 def linearTrendlineCoefficient(*args):
     from sklearn.linear_model import LinearRegression
@@ -185,34 +164,6 @@ def linearTrendlineCoefficient(*args):
     coef_array = reg.coef_
     out = coef_array[0]
     return float(out)
-
-#Convert to UDF
-getLinearTrendlineCoef = udf(lambda *args: linearTrendlineCoefficient(*args), T.FloatType())
-
-#Selecting columns for trendline
-w = Window.partitionBy(lit(1)).orderBy(lit(1))
-df_coef = monthly_increases.select(monthly_increases.columns[4:])
-#Fitting trendline 
-df_coef = df_coef.withColumn('linear_coef', getLinearTrendlineCoef(*[F.col(i) for i in df_coef.columns]))
-df_coef = df_coef.withColumn("row_id", row_number().over(w))
-df_vals = df_vals.withColumn("row_id", row_number().over(w))
-df_headers = df_headers.withColumn("row_id", row_number().over(w))
-mean_values = mean_values.withColumn("row_id", row_number().over(w))
-df_headers = df_headers.join(df_coef.select('linear_coef','row_id'), on='row_id', how='full_outer')
-
-df_mean = df_headers.join(mean_values.drop('Province/State', 'Country/Region', 'Lat', 'Long'), on="row_id", how='full_outer').drop("row_id")
-df_mean = df_mean.sort(F.col("linear_coef").desc())
-
-#%% Following cells are done to get the mean
-top50 = df_mean.limit(50)
-
-#%%
-top50_p = top50.toPandas()
-top50_p = top50_p.drop(columns=['Province/State', 'Country/Region', 'Lat', 'Long', 'linear_coef'])
-top50_p = top50_p.T
-top50_T = spark.createDataFrame(top50_p)
-
-#%%
 
 def kMeansFit(*args):
     import numpy as np
@@ -248,7 +199,7 @@ def kMeansFit(*args):
 
     def __updateCentroid(y, centroids, centroids_pointwise):
         centroid_y = 0
-        count = 0
+        count = 1
         centroid_update = []
         for i in range(len(centroids)):
             for n in range(len(centroids_pointwise)):
@@ -279,10 +230,8 @@ def kMeansFit(*args):
     y = df.mean(axis=1)
     centroids = y.sample(k)
     centroids.reset_index(drop=True, inplace=True)
-    count = 0
+    count = 1
     tol = None
-    # convergenceHistory = []
-
     while True:
         centroids_pointwise = __getPointwiseCentroid(y, centroids)
         centroids = __updateCentroid(y, centroids, centroids_pointwise)
@@ -290,25 +239,13 @@ def kMeansFit(*args):
         if tol is not None and avg == tol:
             break
         tol = avg
-        # convergenceHistory.append(tol)
         count+=1 
-    # convergenceHistory  = pd.DataFrame(convergenceHistory, columns=['centroid mean'])
-    # convergenceHistory.insert(loc=0, column='iter', value=np.arange(1, count+1))
     out = __getPointwiseCentroid(y, centroids)
     _, out = np.unique(out, return_inverse=True)
     out = list(out)
     out = str(out)
     return out
 
-getKmeansCluster = udf(lambda *args: kMeansFit(*args), T.StringType())
-#Fitting cluster 
-top50_T = top50_T.withColumn('cluster_id', getKmeansCluster(*[F.col(i) for i in top50_T.columns]))
-
-#%%
-clusters = top50_T.select('cluster_id').toPandas()
-
-#%%
-import numpy as np
 def convertClusteringOutput(clusters):
     cluster_array = np.array(clusters)
     cluster_array = list(cluster_array)
@@ -323,9 +260,55 @@ def convertClusteringOutput(clusters):
     out.set_axis(top50.columns[5:], axis=1, inplace=True)
     return out
 
+#%%reading the csv into a spark dataframe
+data = spark.read.csv('data.csv', header=True, inferSchema=True)
+#%%
+monthly_increases = getMonthlyIncreases(data)
+mean_values = getMonthlyAverage(data)
+monthly_increases = spark.createDataFrame(monthly_increases)
+mean_values = spark.createDataFrame(mean_values)
+df_vals = data.drop('Province/State', 'Country/Region', 'Lat', 'Long')
+df_headers = data.select('Province/State', 'Country/Region', 'Lat', 'Long')
+
+# In[15]:
+#Convert to UDF
+getLinearTrendlineCoef = udf(lambda *args: linearTrendlineCoefficient(*args), T.FloatType())
+#Selecting columns for trendline
+w = Window.partitionBy(lit(1)).orderBy(lit(1))
+df_coef = monthly_increases.select(monthly_increases.columns[4:])
+#Fitting trendline 
+df_coef = df_coef.withColumn('linear_coef', getLinearTrendlineCoef(*[F.col(i) for i in df_coef.columns]))
+df_coef = df_coef.withColumn("row_id", row_number().over(w))
+df_vals = df_vals.withColumn("row_id", row_number().over(w))
+df_headers = df_headers.withColumn("row_id", row_number().over(w))
+mean_values = mean_values.withColumn("row_id", row_number().over(w))
+df_headers = df_headers.join(df_coef.select('linear_coef','row_id'), on='row_id', how='full_outer')
+
+df_mean = df_headers.join(mean_values.drop('Province/State', 'Country/Region', 'Lat', 'Long'), on="row_id", how='full_outer').drop("row_id")
+df_mean = df_mean.sort(F.col("linear_coef").desc())
+
+#%% Following cells are done to get the mean
+top50 = df_mean.limit(50)
+
+#%%
+top50_p = top50.toPandas()
+top50_p = top50_p.drop(columns=['Province/State', 'Country/Region', 'Lat', 'Long', 'linear_coef'])
+top50_p = top50_p.T
+top50_T = spark.createDataFrame(top50_p)
+
+#%%
+getKmeansCluster = udf(lambda *args: kMeansFit(*args), T.StringType())
+#Fitting cluster 
+top50_T = top50_T.withColumn('cluster_id', getKmeansCluster(*[F.col(i) for i in top50_T.columns]))
+
+#%%
+clusters = top50_T.select('cluster_id').toPandas()
+
+#%%
 df_clusterID = convertClusteringOutput(clusters)
 df_clusterID = spark.createDataFrame(df_clusterID)
 df_clusterID = df_clusterID.withColumn("row_id", row_number().over(w))
 top50_headers = top50.select('Province/State', 'Country/Region', 'Lat', 'Long', 'linear_coef').withColumn("row_id", row_number().over(w))
 df_clusterID = top50_headers.join(df_clusterID, on='row_id', how='full').drop('row_id')
 aa = df_clusterID.toPandas()
+aa.to_csv('clustering_out.csv', index=False)
