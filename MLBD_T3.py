@@ -17,18 +17,18 @@ from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
 
 ### Comment out if not using cluster
-# conf = pyspark.SparkConf()
-# conf.setMaster("spark://login1-sinta-hbc:7077").setAppName("jupyter") #comment out if not using cluster
+conf = pyspark.SparkConf()
+conf.setMaster("spark://login1-sinta-hbc:7077").setAppName("jupyter") #comment out if not using cluster
 
-# spark = pyspark.sql.SparkSession.builder \
-#     .master("spark://login1-sinta-hbc:7077") \
-#     .appName("jupyter") \
-#     .getOrCreate()
+spark = pyspark.sql.SparkSession.builder \
+     .master("spark://login1-sinta-hbc:7077") \
+     .appName("jupyter") \
+     .getOrCreate()
 
 ## Local configuration
-conf = pyspark.SparkConf().setAppName('SparkApp').setMaster('local')
-sc = pyspark.SparkContext(conf=conf)
-spark = SparkSession(sc)
+#conf = pyspark.SparkConf().setAppName('SparkApp').setMaster('local')
+#sc = pyspark.SparkContext(conf=conf)
+#spark = SparkSession(sc)
 
 from pyspark.sql import functions as F 
 from pyspark.sql.window import Window
