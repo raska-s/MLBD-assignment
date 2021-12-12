@@ -15,19 +15,19 @@ findspark.find()
 from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
 
-### Cluster configuration
-conf = pyspark.SparkConf()
-conf.setMaster("spark://login1-sinta-hbc:7077").setAppName("jupyter") #comment out if not using cluster
+### Comment out if not using cluster
+# conf = pyspark.SparkConf()
+# conf.setMaster("spark://login1-sinta-hbc:7077").setAppName("jupyter") #comment out if not using cluster
 
-spark = pyspark.sql.SparkSession.builder \
-    .master("spark://login1-sinta-hbc:7077") \
-    .appName("jupyter") \
-    .getOrCreate()
+# spark = pyspark.sql.SparkSession.builder \
+#     .master("spark://login1-sinta-hbc:7077") \
+#     .appName("jupyter") \
+#     .getOrCreate()
 
 ## Local configuration
-# conf = pyspark.SparkConf().setAppName('SparkApp').setMaster('local')
-# sc = pyspark.SparkContext(conf=conf)
-# spark = SparkSession(sc)
+conf = pyspark.SparkConf().setAppName('SparkApp').setMaster('local')
+sc = pyspark.SparkContext(conf=conf)
+spark = SparkSession(sc)
 
 from pyspark.sql import functions as F 
 from pyspark.sql.window import Window
@@ -358,6 +358,7 @@ df_mean = df_mean.sort(F.col("linear_coef").desc())
 top50 = df_mean.limit(50)
 
 #%% Transposing output out of PySpark to ease computation of Kmeans
+
 top50_p = top50.toPandas()
 top50_p = top50_p.drop(columns=['Province/State', 'Country/Region', 'Lat', 'Long', 'linear_coef'])
 top50_p = top50_p.T
