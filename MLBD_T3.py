@@ -5,8 +5,7 @@ Created on Tue Dec  7 17:23:31 2021
 @author: Raska
 """
 
-# In[1]:
-# TODO: KMEans for pyspark
+#%% Importing libraries
 
 import numpy as np
 import findspark
@@ -16,19 +15,19 @@ findspark.find()
 from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
 
-### Comment out if not using cluster
+### Cluster configuration
 conf = pyspark.SparkConf()
 conf.setMaster("spark://login1-sinta-hbc:7077").setAppName("jupyter") #comment out if not using cluster
 
 spark = pyspark.sql.SparkSession.builder \
-     .master("spark://login1-sinta-hbc:7077") \
-     .appName("jupyter") \
-     .getOrCreate()
+    .master("spark://login1-sinta-hbc:7077") \
+    .appName("jupyter") \
+    .getOrCreate()
 
 ## Local configuration
-#conf = pyspark.SparkConf().setAppName('SparkApp').setMaster('local')
-#sc = pyspark.SparkContext(conf=conf)
-#spark = SparkSession(sc)
+# conf = pyspark.SparkConf().setAppName('SparkApp').setMaster('local')
+# sc = pyspark.SparkContext(conf=conf)
+# spark = SparkSession(sc)
 
 from pyspark.sql import functions as F 
 from pyspark.sql.window import Window
@@ -298,7 +297,7 @@ def convertClusteringOutput(clusters):
         out.append(x)
     out = pd.DataFrame(out)
     out = out.T
-    out.set_axis(top50.columns[5:], axis=1, inplace=True)
+    out.set_axis(['01/20', '02/20', '03/20', '04/20', '05/20', '06/20', '07/20', '08/20', '09/20','10/20', '11/20', '12/20', '01/21', '02/21', '03/21', '04/21', '05/21', '06/21','07/21', '08/21', '09/21', '10/21', '11/21'], axis=1, inplace=True)
     return out
 #%%
 def normaliseValuesStd(df):
@@ -379,16 +378,20 @@ top50_headers = top50.select('Province/State', 'Country/Region', 'Lat', 'Long', 
 df_clusterID = top50_headers.join(df_clusterID, on='row_id', how='full').drop('row_id')
 pdClusterID = df_clusterID.toPandas()
 
+#%% Writing  output to CSV
+months = ['01/20', '02/20', '03/20', '04/20', '05/20', '06/20', '07/20', '08/20', '09/20','10/20', '11/20', '12/20', '01/21', '02/21', '03/21', '04/21', '05/21', '06/21','07/21', '08/21', '09/21', '10/21', '11/21']
+pdClusterID.to_csv('cluster_out.csv')
+
 #%% Sorting output for plotting
 import matplotlib.pyplot as plt
-#TODO: Plot monthly increases v monthly average and add cluster identifier as colour
+
 monthlyIncTop50 = df_headers.join(df_coef.drop('linear_coef'), on="row_id", how='full_outer').drop("row_id")
 monthlyIncTop50 = monthlyIncTop50.sort(F.col("linear_coef").desc()).limit(50)
 pdMonthlyInc = monthlyIncTop50.toPandas()
 pdMonthlyMean= top50.toPandas()
 
 #%% Visualisation 
-vis_month_selection = -2
+vis_month_selection = -1
 cluster_colour = pdClusterID.iloc[:, vis_month_selection]
 vis_data = pd.concat((pdMonthlyMean['linear_coef'], pdMonthlyMean.iloc[:, vis_month_selection]), axis=1)
 # print(pdClusterID.iloc[:, vis_month_selection].name)
@@ -444,7 +447,7 @@ plt.figure(figsize=(16, 10))
 cmap = sns.color_palette("coolwarm", 4)
 g = sns.heatmap(heatmap_out, cmap=cmap, linewidth=0.05, linecolor='lightgrey',  cbar_kws={"ticks":[0, 1, 2, 3]}, square=True)
 g.set_yticklabels(pdClusterID['Country/Region'])
-g.set_xticklabels(['01/20', '02/20', '03/20', '04/20', '05/20', '06/20', '07/20', '08/20', '09/20','10/20', '11/20', '12/20', '01/21', '02/21', '03/21', '04/21', '05/21', '06/21','07/21', '08/21', '09/21', '10/21', '11/21'], rotation = 80)
+g.set_xticklabels(months, rotation = 80)
 
 plt.xlabel('')
 plt.ylabel('')
