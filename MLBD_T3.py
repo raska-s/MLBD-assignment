@@ -17,18 +17,18 @@ from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
 
 ### Comment out if not using cluster
-conf = pyspark.SparkConf()
-conf.setMaster("spark://login1-sinta-hbc:7077").setAppName("jupyter") #comment out if not using cluster
+# conf = pyspark.SparkConf()
+# conf.setMaster("spark://login1-sinta-hbc:7077").setAppName("jupyter") #comment out if not using cluster
 
-spark = pyspark.sql.SparkSession.builder \
-    .master("spark://login1-sinta-hbc:7077") \
-    .appName("jupyter") \
-    .getOrCreate()
+# spark = pyspark.sql.SparkSession.builder \
+#     .master("spark://login1-sinta-hbc:7077") \
+#     .appName("jupyter") \
+#     .getOrCreate()
 
 ## Local configuration
-# conf = pyspark.SparkConf().setAppName('SparkApp').setMaster('local')
-# sc = pyspark.SparkContext(conf=conf)
-# spark = SparkSession(sc)
+conf = pyspark.SparkConf().setAppName('SparkApp').setMaster('local')
+sc = pyspark.SparkContext(conf=conf)
+spark = SparkSession(sc)
 
 from pyspark.sql import functions as F 
 from pyspark.sql.window import Window
@@ -41,7 +41,8 @@ import pandas as pd
 #%% Defining all functions
 
 def getMonthlyIncreases(data):
-    #dropping unwanted columns and grouping by countries
+    ### Wrapper function to run PySpark calculations of monthly increases
+    # Dropping unwanted columns and grouping by countries
     df = data
     w = Window.partitionBy(lit(1)).orderBy(lit(1))
     country_region = df.select(df.columns[:4])
@@ -61,7 +62,7 @@ def getMonthlyIncreases(data):
                 lastdates.append(headers_before_groupby[i])
         except:
             lastdates.append(headers_before_groupby[-1])
-    #concatenating the number of days in each month    
+    #Concatenating the number of days in each month    
     lstdat = []
     for i in lastdates:
         if i == '1/31/20':
@@ -70,16 +71,16 @@ def getMonthlyIncreases(data):
             lstdat.append(i+"-"+i.split("/")[1]+"-days")
             
     Data_datesLast = renamed_frame_afterGroupby.select(lastdates)
-    #renaming multiple columns
+    #Renaming multiple columns
     mapping = dict(zip(lastdates,lstdat))
     Last_dates_data = Data_datesLast.select([F.col(c).alias(mapping.get(c, c)) for c in Data_datesLast.columns])
     
-    #initializing variables to assist in joining dataframes
+    #Initializing variables to assist in joining dataframes
     ls = Last_dates_data.columns
     fin = Last_dates_data.select(Last_dates_data.columns[0])
     DF1 = fin.withColumn("row_id", row_number().over(w))
     
-    #looping though the Dataframe and calculating the mean, and then joining
+    #Looping though the Dataframe and calculating the mean, and then joining
     for i in range(len(ls)):
         if i == 0:
             pass
@@ -89,10 +90,10 @@ def getMonthlyIncreases(data):
             DF3 = increases_singleframe.withColumn("row_id", row_number().over(w))
             DF1 = DF1.join(DF3, ("row_id"))
     
-    #adding an index to country/region to join
+    #Adding an index to country/region to join
     country = country_region.withColumn("row_id", row_number().over(w))
     
-    #joining the country with the remaining dates dataframe
+    #Joining the country with the remaining dates dataframe
     monthly_increases = DF1.join(country, on="row_id", how='full').drop("row_id")
     
     #Rearranging the columns and getting the final result
@@ -102,7 +103,8 @@ def getMonthlyIncreases(data):
     return monthly_increases
 
 def getMonthlyAverage(data):
-    #dropping unwanted columns and grouping by countries
+    ### Wrapper function to run PySpark calculations of monthly average
+    #Dropping unwanted columns and grouping by countries
     df = data
     w = Window.partitionBy(lit(1)).orderBy(lit(1))
     country_region = df.select(df.columns[:4])
@@ -122,7 +124,7 @@ def getMonthlyAverage(data):
                 lastdates.append(headers_before_groupby[i])
         except:
             lastdates.append(headers_before_groupby[-1])
-    #concatenating the number of days in each month    
+    #Concatenating the number of days in each month    
     lstdat = []
     for i in lastdates:
         if i == '1/31/20':
@@ -130,16 +132,16 @@ def getMonthlyAverage(data):
         else:
             lstdat.append(i+"-"+i.split("/")[1]+"-days") 
     Data_datesLast = renamed_frame_afterGroupby.select(lastdates)
-    #renaming multiple columns
+    #Renaming multiple columns
     mapping = dict(zip(lastdates,lstdat))
     Last_dates_data = Data_datesLast.select([col(c).alias(mapping.get(c, c)) for c in Data_datesLast.columns])
     
-    #initializing variables to assist in joining dataframes
+    #Initializing variables to assist in joining dataframes
     ls = Last_dates_data.columns
     fin = Last_dates_data.select(Last_dates_data.columns[0])
     DF1 = fin.withColumn("row_id", row_number().over(w))
     
-    #looping though the Dataframe and calculating the mean, and then joining
+    #Looping though the Dataframe and calculating the mean, and then joining
     for i in range(len(ls)):
         if i == 0:
             pass
@@ -149,10 +151,10 @@ def getMonthlyAverage(data):
             DF3 = increases_singleframe.withColumn("row_id", row_number().over(w))
             DF1 = DF1.join(DF3, ("row_id"))
     
-    #adding an index to country/region to join
+    #Adding an index to country/region to join
     country = country_region.withColumn("row_id", row_number().over(w))
     
-    #joining the country with the remaining dates dataframe
+    #Joining the country with the remaining dates dataframe
     mean_values = DF1.join(country, on="row_id", how='full').drop("row_id")
     
     #Rearranging the columns and getting the final result
@@ -161,8 +163,21 @@ def getMonthlyAverage(data):
     mean_values = mean_values.toPandas()
     return mean_values
 
-#Define standard trendline function
 def linearTrendlineCoefficient(*args):
+    """
+    Wrapper function of linear regression optimised for PySpark data
+
+    Parameters
+    ----------
+    *args : tuple
+        Unbounded list of data points.
+
+    Returns
+    -------
+    float
+        Linear coefficient of linear trendline fit of data points.
+
+    """
     from sklearn.linear_model import LinearRegression
     import numpy as np
     X = []
@@ -178,24 +193,24 @@ def linearTrendlineCoefficient(*args):
     return float(out)
 
 def kMeansFit(*args):
-    import numpy as np
-    import pandas as pd
     """
-    Fits model to data
+    Function to cluster data points
 
     Parameters
     ----------
-    df : pandas dataframe
-        data of features to be fitted.
-    k : int, optional
-        Desired number of k-clusters in k-means. The default is 4.
+    *args : tuple
+        Unbounded list of data points.
 
     Returns
     -------
-    None.
+    out : string
+        String of cluster IDs, in place of list to support conversion into PySpark UDF.
 
     """
+    import numpy as np
+    import pandas as pd
     k=4
+    np.random.seed(42)
     def __normaliseValues(df):
         out = []
         for label, content in df.items():
@@ -210,10 +225,10 @@ def kMeansFit(*args):
         return out    
 
     def __updateCentroid(y, centroids, centroids_pointwise):
-        centroid_y = 0
-        count = 1
         centroid_update = []
         for i in range(len(centroids)):
+            centroid_y = 0
+            count = 1
             for n in range(len(centroids_pointwise)):
                 if centroids_pointwise[n] == centroids[i]:
                     centroid_y += y[n]
@@ -259,6 +274,20 @@ def kMeansFit(*args):
     return out
 
 def convertClusteringOutput(clusters):
+    """
+    Converts string output from kMeansFit into array.
+
+    Parameters
+    ----------
+    clusters : string
+        String form of cluster identification.
+
+    Returns
+    -------
+    out : Pandas dataframe
+        Dataframe form of cluster identification.
+
+    """
     cluster_array = np.array(clusters)
     cluster_array = list(cluster_array)
     out = []
@@ -271,10 +300,37 @@ def convertClusteringOutput(clusters):
     out = out.T
     out.set_axis(top50.columns[5:], axis=1, inplace=True)
     return out
-
-#%%reading the csv into a spark dataframe
-data = spark.read.csv('data.csv', header=True, inferSchema=True)
 #%%
+def normaliseValuesStd(df):
+    """
+    Normalises values between 0 and 1
+
+    Parameters
+    ----------
+    df : pandas Dataframe
+        Data points to be normalised.
+
+    Returns
+    -------
+    out : pandas Dataframe
+        Normalised data points.
+
+    """
+    out = []
+    for label, content in df.items():
+        feature = df[label]
+        numerator = feature - np.min(feature)
+        denominator = np.max(feature) - np.min(feature)
+        output = numerator/denominator
+        out.append(output)
+    out = np.array(out).T
+    out = pd.DataFrame.from_records(out)
+    out.columns = df.columns
+    return out 
+
+#%% Reading the csv into a PySpark dataframe
+data = spark.read.csv('data.csv', header=True, inferSchema=True)
+#%% Obtainining monthly increases and monthly averages and  cleaning
 monthly_increases = getMonthlyIncreases(data)
 mean_values = getMonthlyAverage(data)
 monthly_increases = spark.createDataFrame(monthly_increases)
@@ -282,7 +338,7 @@ mean_values = spark.createDataFrame(mean_values)
 df_vals = data.drop('Province/State', 'Country/Region', 'Lat', 'Long')
 df_headers = data.select('Province/State', 'Country/Region', 'Lat', 'Long')
 
-# In[15]:
+#%% Applying linear trendline coefficient calculation and sorting
 #Convert to UDF
 getLinearTrendlineCoef = udf(lambda *args: linearTrendlineCoefficient(*args), T.FloatType())
 #Selecting columns for trendline
@@ -290,37 +346,108 @@ w = Window.partitionBy(lit(1)).orderBy(lit(1))
 df_coef = monthly_increases.select(monthly_increases.columns[4:])
 #Fitting trendline 
 df_coef = df_coef.withColumn('linear_coef', getLinearTrendlineCoef(*[F.col(i) for i in df_coef.columns]))
+#Sorting output
 df_coef = df_coef.withColumn("row_id", row_number().over(w))
 df_vals = df_vals.withColumn("row_id", row_number().over(w))
 df_headers = df_headers.withColumn("row_id", row_number().over(w))
 mean_values = mean_values.withColumn("row_id", row_number().over(w))
 df_headers = df_headers.join(df_coef.select('linear_coef','row_id'), on='row_id', how='full_outer')
-
 df_mean = df_headers.join(mean_values.drop('Province/State', 'Country/Region', 'Lat', 'Long'), on="row_id", how='full_outer').drop("row_id")
 df_mean = df_mean.sort(F.col("linear_coef").desc())
 
-#%% Following cells are done to get the mean
+#%% Taking only top 50 values
 top50 = df_mean.limit(50)
 
-#%%
+#%% Transposing output out of PySpark to ease computation of Kmeans
 top50_p = top50.toPandas()
 top50_p = top50_p.drop(columns=['Province/State', 'Country/Region', 'Lat', 'Long', 'linear_coef'])
 top50_p = top50_p.T
 top50_T = spark.createDataFrame(top50_p)
 
-#%%
+#%% K-means clustering
 getKmeansCluster = udf(lambda *args: kMeansFit(*args), T.StringType())
 #Fitting cluster 
 top50_T = top50_T.withColumn('cluster_id', getKmeansCluster(*[F.col(i) for i in top50_T.columns]))
-
-#%%
+# Sorting cluster output
 clusters = top50_T.select('cluster_id').toPandas()
 
-#%%
+#%% Converting output and joining with data
 df_clusterID = convertClusteringOutput(clusters)
 df_clusterID = spark.createDataFrame(df_clusterID)
 df_clusterID = df_clusterID.withColumn("row_id", row_number().over(w))
 top50_headers = top50.select('Province/State', 'Country/Region', 'Lat', 'Long', 'linear_coef').withColumn("row_id", row_number().over(w))
 df_clusterID = top50_headers.join(df_clusterID, on='row_id', how='full').drop('row_id')
-aa = df_clusterID.toPandas()
-aa.to_csv('clustering_out.csv', index=False)
+pdClusterID = df_clusterID.toPandas()
+
+#%% Sorting output for plotting
+import matplotlib.pyplot as plt
+#TODO: Plot monthly increases v monthly average and add cluster identifier as colour
+monthlyIncTop50 = df_headers.join(df_coef.drop('linear_coef'), on="row_id", how='full_outer').drop("row_id")
+monthlyIncTop50 = monthlyIncTop50.sort(F.col("linear_coef").desc()).limit(50)
+pdMonthlyInc = monthlyIncTop50.toPandas()
+pdMonthlyMean= top50.toPandas()
+
+#%% Visualisation 
+vis_month_selection = -2
+cluster_colour = pdClusterID.iloc[:, vis_month_selection]
+vis_data = pd.concat((pdMonthlyMean['linear_coef'], pdMonthlyMean.iloc[:, vis_month_selection]), axis=1)
+# print(pdClusterID.iloc[:, vis_month_selection].name)
+vis_data = np.array(vis_data)
+from scipy.spatial import ConvexHull
+
+
+#Plot 1: Monthly scatterplot
+def drawclusters(ax,  X, labels, colours, ncluster=4):
+    """
+    Draws clusters and fits a convex hull to ease visualisation. A convex hull
+    is the smallest convex boundary of the cluster cloud.
+
+    Parameters
+    ----------
+    ax : plt object
+        matplotlib object instance.
+    X : numpy array
+        scatter data to be plotted.
+    labels : numpy array
+        data labels for each point.
+    colours : list
+        list of selected clusters.
+    ncluster : int, optional
+        Number of convex hull instances to generate. The default is 4.
+
+    Returns
+    -------
+    None.
+
+    """
+    for i in range(ncluster):
+        points = X[labels == i]
+        ax.scatter(points[:, 0], points[:, 1], s=30, c=colours[i], label=f'Cluster {i}')
+        ax.legend()
+        hull = ConvexHull(points)
+        vert = np.append(hull.vertices, hull.vertices[0])  # close the polygon by appending the first point at the end
+        ax.plot(points[vert, 0], points[vert, 1], '--', c=colours[i])
+        ax.fill(points[vert, 0], points[vert, 1], c=colours[i], alpha=0.2)
+        ax.set_xlabel('Overall daily linear coefficient')
+        ax.set_ylabel('Mean of daily cases in a month')
+        ax.set_title('Clustering of daily rates of month' )
+        
+fig, ax = plt.subplots(1, figsize=(7, 5))
+colours = ['red', 'green', 'blue', 'orange']
+drawclusters(ax, vis_data, cluster_colour, colours, ncluster=4)
+
+#Plot 2: Seaborn heatmap plotting
+import seaborn as sns
+heatmap_out = pdClusterID.drop(columns=['Country/Region', 'Province/State', 'Lat', 'Long', 'linear_coef'])
+plt.figure(figsize=(16, 10))
+
+cmap = sns.color_palette("coolwarm", 4)
+g = sns.heatmap(heatmap_out, cmap=cmap, linewidth=0.05, linecolor='lightgrey',  cbar_kws={"ticks":[0, 1, 2, 3]}, square=True)
+g.set_yticklabels(pdClusterID['Country/Region'])
+g.set_xticklabels(['01/20', '02/20', '03/20', '04/20', '05/20', '06/20', '07/20', '08/20', '09/20','10/20', '11/20', '12/20', '01/21', '02/21', '03/21', '04/21', '05/21', '06/21','07/21', '08/21', '09/21', '10/21', '11/21'], rotation = 80)
+
+plt.xlabel('')
+plt.ylabel('')
+plt.savefig('globalclust.pdf')
+#%%
+
